@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>mastdon　streaming test 2</title>
+<script type="text/javascript">
+onload = function() {
+	var req = new XMLHttpRequest();
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			save.i_host = save.checked ;
+			save.i_token = s.token ;
+			if(save.i_host=="mstdn.jp") save.i_host = "streaming."+save.i_host ;
+		}
+	} else {
+		alert("set server and access token") ;
+		return ;
+	}
+	var ww,wh ;
+	window.onresize = function() {
+		ww = document.body.offsetWidth - 240 ;
+		wh = document.body.offsetHeight - 50 ;
+	}
+	window.onresize() ;
+	get() ;
+
+	function get() {	
+		var path = "https://"+save.i_host+"/api/v1/streaming/public"
+		req.open("get",path,true) ;
+		req.responseType = "text" ;
+		req.setRequestHeader("Authorization","Bearer "+save.i_token ) ;
+		req.onload = function() {
+			console.log(this.response);
+		}
+		req.onerror = function() {
+			console.log(this);
+		}
+		var size = 0 ;
+		var buf = "" ;
+		var ev = "" ;
+		req.onreadystatechange = function(d) {
+//			console.log(this);
+			if(this.readyState == 3) {
+				var res  = this.response.substr(size).split("\n")  ;
+				var m ;
+				for(i in res) {
+					var s = res[i] ;
+//					console.log([s]) ;
+					if(m = /^event: (.+)/.exec(s)) {
+						ev = m[1] ;
+						continue ;
+					} 
+					if( m = /^data: (.+)/.exec(s)) {
+						buf = m[1] ;
+						continue ;
+					}
+					if( s.match(/^:thump/)) continue ;
+					if( s=="" && buf!="") {
+						show(ev,buf) ;
+						buf="" ;
+					}
+					buf += s ;
+				}
+				size = this.response.length ;
+			}
+			if(this.readyState == 4) { //retry
+				get() ;
+			}
+		}
+		req.send() ;
+	}
+	function show(ev,data) {
+		if(ev=="update") {
+			try {
+				var j = JSON.parse(data) ;
+			} catch(err) {
+				console.log( data );
+				return ;
+			}
+			var c = j.content.replace(/<\/?p>/g,"").replace(/<br ?\/>/g,"").
+				replace(/<script.+>.+<\/script>/g,"") ;
+//				console.log(c) ;
+			var av = j.account.avatar ;
+			if(av.substr(0,1)=="/") av = "https://mstdn.jp"+av ;
+			var a = '<img src="'+av+'">'+c  ;
+			var div = document.createElement("div") ;
+			div.innerHTML = a ;
+			div.className ="base" ;
+			var ac = j.account.id ;
+			div.style.left = ww * (ac % 400)/400 + "px" ;
+			div.style.top = wh * (Math.floor(ac/400)%100)/100 + "px" ;
+			div.setAttribute("data-json", data) ;
+			div.addEventListener("click", function(ev) {
+				console.log(this.getAttribute("data-json")) ;
+			})
+			document.getElementById("result").append(div) ;
+			setTimeout(function() {
+				div.style.opacity = 0.2 ;
+				div.style.boxShadow = "1px 1px 3px 3px #444" ;
+			},1000) ;
+			setTimeout(function() {
+				document.getElementById("result").removeChild(div) ;
+			},120000) ;
+		}
+	}
+}
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+html,body {
+	margin:0 ;
+	width:100% ;
+	height:100% ;
+	font-size:12px;
+	background-color:#002 ;
+}
+#result {
+	width:100% ;
+	height:100% ;
+	overflow:hidden ;
+	position: relative ;
+}
+img {
+	float:left ;
+}
+div.base {
+	position:absolute ;
+	background-color:#eee;
+	border:1px solid #888 ;
+	padding:0.2rem ;
+	width:20rem ;
+	height:3rem ;
+	overflow-y:scroll ;
+	clear:all ;
+	box-shadow:1px 1px 3px 3px #e44 ;
+	opacity:1.0 ;
+	transition:opacity 20s 10s linear ;
+	cursor:pointer ;
+}
+div.base img {
+	width:3rem ;
+}
+</style>
+</head>
+<body>
+<div id=result></div>
+</body>
+</html>

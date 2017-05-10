@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>mastdon　image test 2</title>
+<script type="text/javascript" src="js/Mastodon.js"></script>
+<script type="text/javascript">
+onload = function() {
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			save.i_host = save.checked ;
+			save.i_token = s.token ;
+			if(save.i_host=="mstdn.jp") save.i_host = "streaming."+save.i_host ;
+		}
+		console.log("server:" + save.i_host ) ;
+	} else {
+		alert("set server and access token") ;
+		return ;
+	}
+
+	var ww,wh ;
+	window.onresize = function() {
+		ww = document.body.offsetWidth - 120 ;
+		wh = document.body.offsetHeight -120 ;
+	}
+	window.onresize() ;
+	var base = document.getElementById("result") ;
+	base.addEventListener("drop", function(ev) {
+		var k = ev.dataTransfer.getData("text").split("/") ;
+		var dx = k[1] - ev.pageX ;
+		var dy = k[2] - ev.pageY ;
+		var tgt = document.getElementById(k[0]) ;
+		tgt.style.left = (tgt.offsetLeft - dx) + "px" ;
+		tgt.style.top = (tgt.offsetTop - dy ) +"px" ;				
+		ev.preventDefault() ;				
+	})
+	base.addEventListener("dragenter", function(ev){ev.preventDefault()})
+	base.addEventListener("dragover", function(ev){ev.preventDefault()})
+	
+	var m = new Mastodon(save.i_host,save.i_token) ;
+	var sc = 0 ;
+	function get() {
+		m.stream("/api/v1/streaming/public",null,function(ev,buf){
+			if(ev==null) { // error retry ;
+				console.log("err retry") ;
+				m.abort() ;
+				get() ;
+				return ;
+			}
+			if(ev=="update") {
+				try {
+					var j = JSON.parse(buf) ;
+					show(j) ;
+					if(sc++>1000) {
+						console.log("reload") ;
+						sc= 0;
+						m.abort() ;
+						get() ;
+					}
+				} catch(err) {
+					console.log("parse err")
+					console.log( buf );
+					return ;
+				}
+			}
+		})
+	}
+
+	var count = 0 ;
+	var images = 0 ;
+	var zi = 1 ;
+	get() ;
+
+	function show(j) {
+		count++ ;
+		document.getElementById("count").innerHTML = base.childNodes.length+"/"+images+"/"+count ;
+		if(j.media_attachments.length==0) return ;
+		var c = j.content.replace(/<\/?p>/g,"").replace(/<br ?\/?>/g,"").
+			replace(/<script.+>.+<\/script>/g,"") ;
+//				console.log(c) ;
+		var av = j.account.avatar ;
+		if(av.substr(0,1)=="/") av = "https://mstdn.jp"+av ;
+		var h = '<a href="'+j.account.url+'" target="_blank"><img class="av" src="'+av+'"></a>'  ;
+		h = '<div class=h>'+h+j.account.display_name+j.account.username+'<br/>'+c+
+		'<div class=close>×</div></div>' ;
+		for(var i =0;i<j.media_attachments.length;i++) {
+			images++ ;
+			var cls = "pic "+((j.sensitive==true)?"sensitive":"") ;
+			var a = h + '<img src="'+ j.media_attachments[i].preview_url +'" class="'+cls+'">' ;
+
+			var div = document.createElement("div") ;
+			div.innerHTML = a ;
+			div.className ="base "+((i==0)?"bred":"") ;
+			div.setAttribute("id", j.id+"_"+i ) ;
+			var ac = j.account.id ;
+			div.style.left = ww * (ac % 400)/400 + i*4 +"px" ;
+			div.style.top = wh * (Math.floor(ac/400)%100)/100 + i*4 +"px" ;
+			div.draggable = "true" ;
+			div.style.zIndex = zi++ ;
+			div.addEventListener("mousedown", function(ev) {
+				div.style.zIndex = zi++ ;
+			})
+			div.addEventListener("touchstart", function(ev) {
+				div.style.zIndex = zi++ ;
+			})
+			div.addEventListener("dragstart", function(ev) {
+				var mx = ev.pageX ;
+				var my = ev.pageY ;
+				ev.dataTransfer.setData("text",this.id+"/"+mx+"/"+my);
+			})
+			base.append(div) ;
+			if(base.childNodes.length>200) {
+				base.removeChild(base.childNodes[0]) ;
+			}
+			div.querySelector("div.close").addEventListener("click", function(){
+				base.removeChild(this.parentNode.parentNode) ;
+			})
+			if(i==0) setTimeout(function() {
+				div.classList.remove("bred")
+			},2000) ;
+		}
+	}
+}
+
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+html,body {
+	margin:0 ;
+	width:100% ;
+	height:100% ;
+	font-size:12px;
+	background-color:#002 ;
+	font-family:sans-serif ;
+}
+#result {
+	width:100% ;
+	height:100% ;
+	overflow:hidden ;
+	position: relative ;
+}
+img.av {
+	width:2rem ;
+	float:left ;
+	cursor:pointer ;
+}
+div.base {
+	position:absolute ;
+	border:1px solid #888 ;
+	padding:0.2rem ;
+	width:10rem ;
+	height:12rem ;
+	clear:all ;
+	box-shadow:2px 2px 5px #444 ;
+	opacity:1.0 ;
+	cursor:move;
+	text-align:center ;
+}
+div.bred {
+	box-shadow:2px 2px 5px #e44 ;	
+}
+div.base img.pic {
+	max-width:10rem ;
+	max-height:10rem ;
+}
+div.base img.sensitive {
+	opacity:0.2 ;
+}
+div.h {
+	width:100% ;
+	height:2rem ;
+	background-color:#888;
+	margin-bottom:0.2rem ;
+	text-align:left ;
+	overflow:hidden ;
+	overflow-y:scroll ;
+	word-wrap:break-word ;
+}
+div.close {
+	position:absolute ;
+	font-size:1.4rem ;
+	text-shadow:0px 0px 2px white ;
+	top:0 ;
+	left:9rem ;
+	cursor:pointer ;
+}
+#count {
+	position:absoulte ;
+	color:white ;
+}
+</style>
+</head>
+<body>
+<div id=count></div>
+<div id=result></div>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=360">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>SPEECH MASTODON</title>
+<script type="text/javascript" src="js/WBind.js"></script>
+<script type="text/javascript" src="js/Mastodon.js"></script>
+<script type="text/javascript">
+function $$(id){ return document.getElementById(id)}
+onload = function() {
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			save.i_host = save.checked ;
+			save.i_token = s.token ;
+			if(save.i_host=="mstdn.jp") save.i_host = "streaming."+save.i_host ;
+		}
+		console.log(save) ;
+		var sel = [	]
+		for(var i in save.instances) {
+			sel.push('<option value="'+i+'">'+i+'</options>') ;
+		}
+		$$('isel').innerHTML = sel.join("\n") ;
+		console.log("server:" + save.i_host ) ;
+	} else {
+		alert("set server and access token") ;
+		return ;
+	}
+	var ww,wh ;
+	window.onresize = function() {
+		ww = document.body.offsetWidth - 240 ;
+		wh = document.body.offsetHeight - 50 ;
+	}
+	window.onresize() ;
+	
+	var param = WBind.create() ;
+	param.bindAllInput($$("param"),{change:function(v,n) {
+		console.log(n+"="+v) ;
+	}}) ;
+
+	var m = new Mastodon(save.i_host,save.i_token) ;
+	var sc = 0 ;
+	var count = 0 ;
+	var images = 0 ;
+	var zi = 1 ;
+	document.getElementById("b_start").addEventListener("click", function(ev){
+		console.log(param) ;
+		return ;
+		get() ;
+	})
+
+	function get() {
+		m.stream("/api/v1/streaming/public",null,function(ev,buf){
+			if(ev==null) { // error retry ;
+				console.log("err retry") ;
+				m.abort() ;
+				get() ;
+				return ;
+			}
+			if(ev=="update") {
+				try {
+					var j = JSON.parse(buf) ;
+				} catch(err) {
+					console.log("parse err")
+					console.log( buf );
+					return ;
+				}
+				show(j) ;
+				if(sc++>1000) {
+					console.log("reload") ;
+					sc= 0;
+					m.abort() ;
+					get() ;
+				}
+			}
+		})
+	}
+	var base = document.getElementById("result") ;
+	function show(j) {
+		count++ ;
+		var c = j.content.
+			replace(/<\/?p>/g,"").
+//			replace(/<br ?\/?>/g,"").
+			replace(/<script.+>.+<\/script>/g,"") ;
+//				console.log(c) ;
+		var av = j.account.avatar ;
+		if(av.substr(0,1)=="/") av = "https://mstdn.jp"+av ;
+		var a = '<a href="'+j.account.url+'" target="_blank"><img src="'+av+'"></a>'  ;
+		if(j.media_attachments.length>0) {
+			a = a + '<img src="'+ j.media_attachments[0].preview_url +'">' ;
+		}
+		a = a + c + "<br clear=all>" ;
+		var div = document.createElement("div") ;
+		div.innerHTML = a ;
+		div.className ="base" ;
+		var ac = j.account.id ;
+		div.addEventListener("click", function(ev) {
+			sound(true,c)
+		})
+	
+		base.insertBefore(div,base.firstChild) ;
+		var tl = sound(false,c)
+		setTimeout(function() {
+			div.style.border = "1px solid black"
+		},1000) ;
+//		if(base.childNodes.length>500) {
+//			base.removeChild(base.childNodes[0]) ;
+//		}
+	}
+
+	if(!window.speechSynthesis) {
+		alert("音声はうごきませんm(_ _)m") ;
+	}
+var voices = window.speechSynthesis.getVoices();
+console.log(voices)
+	function sound(f,c) {
+		if(!f && speechSynthesis.speaking) return ;
+		if(f) speechSynthesis.cancel() ;
+		var sps = new SpeechSynthesisUtterance();
+		sps.volume = 1; // 0-1
+		sps.rate = 2 ; // 0.1-10
+		sps.pitch = 1; // 0-2 1 = normal
+		sps.lang = "ja-JP";
+	
+		sps.text = c.replace(/<.+>.+<\/.+>/,"").replace(/<.+>/,"")  ;
+		speechSynthesis.speak(sps);
+	}
+}
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+html,body {
+	margin:0 ;
+	width:100% ;
+	height:100% ;
+	font-size:12px;
+	background-color:#002 ;
+	font-family:sans-serif ;
+}
+#result {
+	width:100% ;
+	height:100% ;
+	overflow:scroll;
+}
+img {
+	float:left ;
+}
+div.base {
+	background-color:#eee;
+	border:1px solid #f88 ;
+	padding:0.2rem ;
+	width:30rem ;
+	clear:all ;
+	opacity:1.0 ;
+	cursor:pointer ;
+	box-sizing: border-box ;
+}
+div.base img {
+	width:3rem ;
+}
+input {
+	font-size:1.2rem ;
+}
+div.control {
+	width:30rem ;
+	font-size:1.2rem ;
+	color:white ;
+}
+#count {
+	color:white ;
+}
+</style>
+</head>
+<body>
+<div class=control>
+SPEECH MASTODON<br/>
+<div id=param>
+instance:<select id=isel name=s_instnace></select><br/>
+timeline:<label><input type=radio name=i_tl value=local>local</label> <label><input type=radio name=i_tl value=public>public</label><br/>
+queue mode:<label><input type=radio name=i_qm value=1>fast</label> <label><input type=radio name=i_qm value=2>last</label> <label><input type=radio name=i_qm value=3>all</label><br/>
+speed:<input type=range name=i_sp min=10 max=1000 value=200><br/>
+pitch:<input type=range name=i_pi min=0 max=200 value=100><br/>
+</div>
+<button id=b_start>START</button>
+</div>
+<span id=count></span>
+<div id=result>
+</div>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<title>mastdon API streaming test</title>
+<script type="text/javascript" src="js/WBind.js"></script>
+<script type="text/javascript">
+onload = function() {
+		var req = new XMLHttpRequest();
+	document.querySelectorAll('button').forEach(function(val) {
+		val.addEventListener("click", function(ev) {
+			if(this.innerHTML=="abort") {
+				req.abort();
+			} else 
+			get(this.innerHTML)
+		})
+	});
+	var setup = WBind.create() ;
+	setup.bindAllInput(document.getElementById("l_setup")) ;
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			setup.i_host = save.checked ;
+			setup.i_token = s.token ;
+			if(setup.i_host=="mstdn.jp") setup.i_host = "streaming."+setup.i_host ;
+		}
+	}
+	var input = WBind.create() ;
+	input.bindAllInput(document.getElementById("param")) ;
+	var output = WBind.create() ;
+	output.bindHtml("result",'#result') ;
+	output.bindInput("link",'#h_link') ;	
+	output.bindHtml("request",'#request') ;
+
+	function get(api) {		
+		localStorage.setItem('mstdn_setup',JSON.stringify(setup.prop)) ;
+		
+		var path = "https://"+setup.i_host+"/api/v1/"+api+"?" ;
+		var param = {} ;
+		if(input.i_max_id>0) param.max_id = input.i_max_id ;
+		if(input.i_since_id>0) param.since_id = input.i_since_id ;
+		if(input.i_limit>0) param.limit = input.i_limit ;
+		for(var i in param) path = path + i+"="+param[i]+"&" ;
+	
+		output.request = path ;
+
+		req.open("get",path,true) ;
+		req.responseType = "text" ;
+		req.setRequestHeader("Authorization","Bearer "+setup.i_token ) ;
+		req.onload = function() {
+			output.link = this.getResponseHeader("Link") ;
+			console.log(this.response);
+			output.result = (JSON.stringify(this.response)) ;	
+		}
+		req.onerror = function() {
+			console.log(this);
+			output.result = ("Ajax error:"+this.statusText)
+		}
+		var size = 0 ;
+		var buf = "" ;
+		var ev = "" ;
+		req.onreadystatechange = function(d) {
+//			console.log(this);
+			if(this.readyState == 3) {
+				var res  = this.response.substr(size).split("\n")  ;
+				console.log(res) ;
+
+//console.log("*") ;
+				var m ;
+				for(i in res) {
+					var s = res[i] ;
+//					console.log([s]) ;
+					if(m = /^event: (.+)/.exec(s)) {
+						ev = m[1] ;
+						continue ;
+					} 
+					if( m = /^data: (.+)/.exec(s)) {
+						buf = m[1] ;
+						continue ;
+					}
+					if( s.match(/^:thump/)) continue ;
+					if( s=="" && buf!="") {
+						show(ev,buf) ;
+						buf="" ;
+					}
+					buf += s ;
+				}
+				size = this.response.length ;
+			}
+		}
+		req.send() ;
+	}
+	function show(ev,data) {
+		if(ev=="update") {
+			try {
+				var j = JSON.parse(data) ;
+//				console.log(j) ;
+				output.result = data ;
+			} catch(err) {
+				console.log( data );
+			}
+		}
+	}
+}
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+input {
+	font-size:1rem ;
+}
+button {
+	font-size:1.2rem ;
+}
+#result {
+	width:90% ;
+	margin:1rem ;
+	border:1px solid black ;
+	word-wrap:break-word ;
+}
+</style>
+</head>
+<body>
+<h1>mastodon API streaming checker</h1>
+Settings:
+<ul id=l_setup>
+<li>server: <input type=text size=40 value="mstdn.jp" name="i_host"></li>
+<li>access token: <input type=text size=40 name="i_token"></li>
+</ul>
+API 
+<button>streaming/public</button>
+<button>abort</button><br/>
+<br/>
+Request: <span id=request></span><br/>
+<div id=result></div>
+</body>
+</html>

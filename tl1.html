@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<title>mastdon API test</title>
+<script type="text/javascript" src="js/WBind.js"></script>
+<script type="text/javascript">
+onload = function() {
+
+	document.querySelectorAll('button').forEach(function(val) {
+		val.addEventListener("click", function(ev) {
+			get(this.innerHTML)
+		})
+	});
+	var setup = WBind.create() ;
+	setup.bindAllInput(document.getElementById("l_setup")) ;
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			setup.i_host = save.checked ;
+			setup.i_token = s.token ;
+		}
+	}
+	var input = WBind.create() ;
+	input.bindAllInput(document.getElementById("param")) ;
+	var output = WBind.create() ;
+	output.bindHtml("result",'#result') ;
+	output.bindInput("link",'#h_link') ;	
+	output.bindHtml("request",'#request') ;
+
+	function get(api) {		
+		var param = {} ;
+		if(input.i_id>0) api = api.replace("{id}",input.i_id) ;
+		if(input.i_max_id>0) param.max_id = input.i_max_id ;
+		if(input.i_since_id>0) param.since_id = input.i_since_id ;
+		if(input.i_limit>0) param.limit = input.i_limit ;
+		var path = "https://"+setup.i_host+"/api/v1/"+api ;
+		path = path + ((path.search(/\?/)==-1)?"?":"&") ;
+		for(var i in param) path = path + i+"="+param[i]+"&" ;
+	
+		output.request = path ;
+		var req = new XMLHttpRequest();
+		req.open("get",path,true) ;
+		req.responseType = "json" ;
+		req.setRequestHeader("Authorization","Bearer "+setup.i_token ) ;
+		req.onload = function() {
+			output.link = this.getResponseHeader("Link") ;
+			console.log(this.response.length);
+			output.result = (JSON.stringify(this.response)) ;	
+		}
+		req.onerror = function() {
+			console.log(this);
+			output.result = ("Ajax error:"+this.statusText)
+		}
+		req.send() ;
+	}
+}
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+input {
+	font-size:1rem ;
+}
+button {
+	font-size:1.2rem ;
+}
+#result {
+	width:90% ;
+	margin:1rem ;
+	border:1px solid black ;
+	word-wrap:break-word ;
+}
+</style>
+</head>
+<body>
+<h1>mastodon API checker</h1>
+Settings:
+<ul id=l_setup>
+<li>server: <input type=text size=40 value="mstdn.jp" name="i_host"></li>
+<li>access token: <input type=text size=40 name="i_token"></li>
+</ul>
+API 
+<button>instance</button>
+<button>accounts/{id}</button>
+<button>accounts/{id}/statuses</button>
+<button>notifications</button>
+<br/>
+<button>timelines/home</button>
+<button>timelines/public</button>
+<button>timelines/public?local=true</button><br/>
+<div id=param>
+Param id:<input type=text name="i_id" size=10> limit:<input type=text name="i_limit" size=10> max_id:<input type=text name="i_max_id" size=10> since_id:<input type=text name="i_since_id" size=10></div>
+<br/>
+Request: <span id=request></span><br/>
+ResponseHeader:Link:<input type=text id=h_link size=120><br/>
+<div id=result></div>
+</body>
+</html>

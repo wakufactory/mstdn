@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>mastdon　streaming test 5</title>
+<script type="text/javascript" src="js/was.js"></script>
+<script type="text/javascript" src="js/Mastodon.js"></script>
+<script type="text/javascript">
+onload = function() {
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		var s = save.instances[save.checked] ;
+		if(s) {
+			save.i_host = save.checked ;
+			save.i_token = s.token ;
+			if(save.i_host=="mstdn.jp") save.i_host = "streaming."+save.i_host ;
+		}
+		console.log("server:" + save.i_host ) ;
+	} else {
+		alert("set server and access token") ;
+		return ;
+	}
+	var ww,wh ;
+	window.onresize = function() {
+		ww = document.body.offsetWidth - 240 ;
+		wh = document.body.offsetHeight - 50 ;
+	}
+	window.onresize() ;
+
+	var m = new Mastodon(save.i_host,save.i_token) ;
+	var sc = 0 ;
+	get() ;
+	var count = 0 ;
+	var images = 0 ;
+	var zi = 1 ;
+
+	function get() {
+		m.stream("/api/v1/streaming/public",null,function(ev,buf){
+			if(ev==null) { // error retry ;
+				console.log("err retry") ;
+				m.abort() ;
+				get() ;
+				return ;
+			}
+			if(ev=="update") {
+				try {
+					var j = JSON.parse(buf) ;
+				} catch(err) {
+					console.log("parse err")
+					console.log( buf );
+					return ;
+				}
+				show(j) ;
+				if(sc++>1000) {
+					console.log("reload") ;
+					sc= 0;
+					m.abort() ;
+					get() ;
+				}
+			}
+		})
+	}
+	var base = document.getElementById("result") ;
+	function show(j) {
+		count++ ;
+		var c = j.content.replace(/<\/?p>/g,"").replace(/<br ?\/?>/g,"").
+			replace(/<script.+>.+<\/script>/g,"") ;
+//				console.log(c) ;
+		var av = j.account.avatar ;
+		if(av.substr(0,1)=="/") av = "https://mstdn.jp"+av ;
+		var a = '<a href="'+j.account.url+'" target="_blank"><img src="'+av+'"></a>'  ;
+		if(j.media_attachments.length>0) {
+			a = a + '<img src="'+ j.media_attachments[0].preview_url +'">' ;
+		}
+		a = a + c ;
+		var div = document.createElement("div") ;
+		div.innerHTML = a ;
+		div.className ="base" ;
+		var ac = j.account.id ;
+		div.style.left = ww * (ac % 400)/400 + "px" ;
+		div.style.top = wh * (Math.floor(ac/400)%100)/100 + "px" ;
+//			console.log(j.id) ;
+		div.addEventListener("click", function(ev) {
+//			console.log(this.getAttribute("data-json")) ;
+		})
+	
+		base.append(div) ;
+		sound(j.account.id,c.length)
+		if(base.childNodes.length>500) {
+			base.removeChild(base.childNodes[0]) ;
+		}
+		document.getElementById("count").innerHTML = base.childNodes.length ;
+		setTimeout(function() {
+			div.style.opacity = 0.2 ;
+			div.style.boxShadow = "1px 1px 3px 3px #444" ;
+		},1000) ;
+	}
+	var syn = new WAS.synth()
+	var opt = {
+		'eg':{
+			'attack':0.02,
+			'decay':0.1,
+			'sustain':0.3,
+			'release':0.5,
+			'maxvalue':1.0,
+			'minvalue':0
+		}		
+	}
+	function sound(id,len) {
+		var om = syn.createongen(opt) ;
+		om.note(id%2000+100,0.5)
+	}
+}
+
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+html,body {
+	margin:0 ;
+	width:100% ;
+	height:100% ;
+	font-size:12px;
+	background-color:#002 ;
+	font-family:sans-serif ;
+}
+#result {
+	width:100% ;
+	height:100% ;
+	overflow:hidden ;
+	position: relative ;
+}
+img {
+	float:left ;
+}
+div.base {
+	position:absolute ;
+	background-color:#eee;
+	border:1px solid #888 ;
+	padding:0.2rem ;
+	width:20rem ;
+	height:3rem ;
+	overflow-y:scroll ;
+	clear:all ;
+	box-shadow:1px 1px 3px 3px #e44 ;
+	opacity:1.0 ;
+	transition:opacity 20s 10s linear ;
+	cursor:pointer ;
+}
+div.base img {
+	width:3rem ;
+}
+#count {
+	color:white ;
+}
+</style>
+</head>
+<body>
+<span id=count></span>
+<div id=result></div>
+</body>
+</html>

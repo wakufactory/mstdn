@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width">
+<title>mastodonクライアント実験</title>
+<script type="text/javascript">
+function $$(id){ return document.getElementById(id)}
+onload = function() {
+	var save = localStorage.getItem('mstdn_config')
+	if(save) {
+		save = JSON.parse(save) ;
+		console.log(save) ;
+		var l = [] ;
+		Object.keys(save.instances).forEach(function(key) {
+			l.push( '<li><input type=radio name=lsel value="'+key+'">'+key+'</li>')
+		})
+		$$('alist').innerHTML = (l.join("\n")) ;
+		if(save.checked) document.querySelector("input[value='"+ save.checked+"']").
+				setAttribute("checked", true)
+		document.querySelectorAll("input[name=lsel]").forEach(function(v){
+			v.addEventListener("change", function(ev){
+				if(this.checked) {
+					setlocal("checked",this.value) ;
+				}
+			})
+		})
+	}
+	var p = location.href.indexOf("?code=") ;
+	if(p!==-1 && save.auth) {
+		var code = location.href.substr(p+6) ;
+		console.log(code) ;
+		var auth = save.auth ;
+		var redir = location.href.substr(0,p) ;
+		var args = {
+			client_id:auth.client_id,
+			client_secret:auth.client_secret,
+			redirect_uri:redir,
+			grant_type: "authorization_code",
+			code:code
+		}
+		post("https://"+auth.host+"/oauth/token",args,function(d) {
+			setlocal({instance:auth.host},{token:d.access_token})
+			setlocal("auth",null)
+			location.href = redir ;
+		})
+	}
+	$$("b_login").addEventListener("click", function() {
+		var host = $$("i_host").value ;
+		var url = "https://"+ host +"/api/v1/apps" ;
+		var scopes = "read" ;
+		var args = {
+			client_name:"mstdn_wakufactory",
+			redirect_uris:location.href,
+			website:location.href,
+			scopes:scopes
+		}
+		post(url,args,function(d) {
+			console.log(d) ;
+			setlocal("auth",
+				{host:host,client_id:d.client_id,client_secret:d.client_secret});
+			location.href = "https://"+host+
+				"/oauth/authorize?client_id="+d.client_id+
+				"&redirect_uri="+location.href+"&response_type=code&scope=" + scopes;
+		})
+	})
+	function post(path,args,cb) {
+		var data = [];
+		Object.keys(args).forEach(function(key) {
+			data.push(encodeURIComponent(key) + '=' + encodeURIComponent(args[key]));
+		});
+		data = data.join('&').replace(/%20/g, '+');
+    	var xhr = new XMLHttpRequest();
+		xhr.onload = function(data) {
+			cb(this.response) ;
+		}
+		xhr.open("POST", path, true);
+		xhr.setRequestHeader("Content-Type" , "application/x-www-form-urlencoded");
+		xhr.responseType = "json";
+		xhr.send(data);		
+	}
+	function setlocal(param,v) {
+		var d = localStorage.getItem("mstdn_config") ;
+		if(!d) d = {instances:{}} ;
+		else d = JSON.parse(d) ;
+		if(param.instance) d.instances[param.instance] = v ;
+		else d[param] = v ;
+		localStorage.setItem("mstdn_config",JSON.stringify(d)) ;
+	}
+}
+</script>
+<link rel="stylesheet" type="text/css" href="">
+<style type="text/css">
+</style>
+</head>
+<body>
+<h1>mastodonクライアント実験</h1>
+<p>mastodonのタイムラインを色々な方法で表現する実験ページです。last update:2017/04/06</p>
+<p>想定ブラウザは、Chrome,firefox,safari(mac/ios),Edgeです。IE11は非対応。モバイルで動くのもあれば動かないのもあります。</p>
+<p>以下の実験ページのアクセスは、mastodonのインスタンス毎の認証が必要です。</p>
+<h2>インスタンス認証</h2>
+host: <input type=text size=40  id="i_host" placeholder="mstdn.jp pawoo.net etc.."> 
+<button id=b_login>ログインして認証する</button><br/>
+※認証はreadのみで行われるので、以下のページで自動的にtootoすることはありません。
+<h2>認証済みインスタンス</h2>
+<ul id=alist>
+</ul>
+(選択されているインスタンスのタイムラインが以下のページに出ます)
+<p>以下のページはブラウザのみで動作し、サーバサイドのスクリプトはありません。認証で取得されたaccess tokenは、ブラウザのlocal storageにのみ保存され、対象のサーバ以外に送信されることはありません。<br/>また認証はmastodonの設定の「認証済みアプリ」の所に"mstdn_wakufactory"として登録され、いつでも無効化できます。</p>
+
+<h2>実験ページ一覧</h2>
+<ol>
+<li><a href="tl1.html">mastodon APIを呼んでみるテスト</a></li>
+<li><a href="tl2.html">streaming APIを呼んでみるテスト</a></li>
+<li><a href="stream1.html">ストリームTL実験その一。ランダム表示</a></li>
+<li><a href="stream2.html">ストリームTL実験その2。アカウントのIDから位置決め</a></li>
+<li><a href="stream3.html">ストリームTL実験その3。画像サムネ表示。アイコンクリックで開く</a><img src="screen4.png" width=200></li>
+<li><a href="image1.html">画像TLその1　ランダムに500枚まで敷き詰め。クリックでその人のホーム</a></li>
+<li><a href="image2.html">画像TLその2　マウスで移動できるように。アイコンクリックでホーム開く。200枚まで。</a><img src="screen7.png" width=200></li>
+<li><a href="stream4.html">ストリームTL実験その4。表示数を500まで絞る。</a></li>
+<li><a href="stream5.html">ストリームTL実験その5。音をつけてみた1 ランダムTL(音が出ます)</a></li>
+<li><a href="stream6.html">ストリームTL実験その6。音をつけてみた2 普通のスクロールTL (音が出ます)</a><iframe width="312" height="176" src="http://ext.nicovideo.jp/thumb/sm31165571" scrolling="no" style="border:solid 1px #ccc;" frameborder="0"><a href="http://www.nicovideo.jp/watch/sm31165571">Mastodonクライアント実験。TLにサウンドをつけてみた。その2</a></iframe></li>
+<li><a href="stream7.html">ストリームTL実験その7。音をつけてみた3 普通のスクロールTL 音程をchromaticに。ツイート文字数に応じて長さを変更。 (音が出ます)</a></li>
+<li><a href="stream8.html">ストリームTL実験その8。音声をつけてみた1 (音が出ます)</a>speech synthesysがサポートされている環境で喋るよ。クリックしたのを優先的に。</li>
+</ol>
+<hr>
+<a href="https://mstdn.jp/@wakufactory">wakufactory@mstdn.jp</a> <a href="https://twitter.com/wakufactory">wakufactory@twitter</a>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-19823181-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>
