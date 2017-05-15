@@ -76,6 +76,6 @@ Mastodon.prototype.stream = function(api,p,cb) {
 	req.send() ;	
 }
 Mastodon.prototype.abort = function() {
-	this.req.abort();
+	if(this.req) this.req.abort();
 	this.req = null ;
 } 
